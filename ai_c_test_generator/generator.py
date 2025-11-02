@@ -21,12 +21,13 @@ class SmartTestGenerator:
     - DMA transfer testing
     """
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, redact_sensitive: bool = False):
         """Initialize the test generator with Google Gemini API."""
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel('gemini-1.5-flash')
         self.analyzer = DependencyAnalyzer('.')
         self.validator = TestValidator()
+        self.redact_sensitive = redact_sensitive
 
         # Enhanced embedded-specific prompts
         self.embedded_prompts = {
