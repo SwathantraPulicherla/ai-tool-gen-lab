@@ -238,8 +238,9 @@ def main():
 
             max_attempts = args.max_regeneration_attempts + 1  # +1 for initial generation
             attempt = 0
-            final_result = None
-            final_validation = None
+            best_result = None
+            best_validation = None
+            best_quality_level = -1  # Start with invalid quality
 
             while attempt < max_attempts:
                 attempt += 1
@@ -258,9 +259,24 @@ def main():
                         print(f"   🔍 Validating (attempt {attempt})...")
                     validation_result = validator.validate_test_file(result['test_file'], file_path)
 
-                    # Check if regeneration is needed based on quality threshold
+                    # Get quality level for comparison
                     quality_levels = {'low': 0, 'medium': 1, 'high': 2}
                     current_quality_level = quality_levels.get(validation_result['quality'].lower(), 0)
+
+                    # Update best result if this attempt is better
+                    if current_quality_level > best_quality_level:
+                        # Remove previous best file if it exists
+                        if best_result and os.path.exists(best_result['test_file']):
+                            os.remove(best_result['test_file'])
+                        best_result = result
+                        best_validation = validation_result
+                        best_quality_level = current_quality_level
+                    else:
+                        # Remove this attempt's file since it's not better
+                        if os.path.exists(result['test_file']):
+                            os.remove(result['test_file'])
+
+                    # Check if regeneration is needed based on quality threshold
                     threshold_quality_level = quality_levels.get(args.quality_threshold.lower(), 0)
 
                     needs_regeneration = (
@@ -306,16 +322,16 @@ def main():
                     print(f"   ❌ Error processing {rel_path}: {str(e)}")
                     break
 
-            # Process final result
-            if final_result and final_result['success']:
+            # Process best result
+            if best_result and best_result['success']:
                 successful_generations += 1
-                validation_reports.append(final_validation)
+                validation_reports.append(best_validation)
 
                 # Track successful regenerations
                 if attempt > 1:
                     regeneration_stats['successful_regenerations'] += 1
 
-                print(f"   ✅ [OK] Final: {os.path.basename(final_result['test_file'])} ({final_validation['quality']} quality)")
+                print(f"   ✅ [OK] Final: {os.path.basename(best_result['test_file'])} ({best_validation['quality']} quality)")
             else:
                 print(f"   ❌ [ERROR] Failed to generate acceptable test for {rel_path}")
 
