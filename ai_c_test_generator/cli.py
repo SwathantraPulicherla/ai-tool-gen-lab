@@ -5,6 +5,7 @@ CLI interface for AI C Test Generator
 
 import argparse
 import os
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -23,6 +24,124 @@ except ImportError:
 
 from .generator import SmartTestGenerator
 from .validator import TestValidator
+
+
+def _robust_cleanup_directory(dir_path, max_retries=3, delay=0.1):
+    """
+    Robustly clean up a directory on Windows, handling permission issues.
+    
+    Args:
+        dir_path: Path to the directory to clean up
+        max_retries: Maximum number of retries for each operation
+        delay: Delay between retries in seconds
+    """
+    import time
+    import stat
+    
+    if not os.path.exists(dir_path):
+        return
+    
+    def _remove_readonly(func, path, _):
+        """Clear readonly bit and reattempt removal"""
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except OSError:
+            pass
+    
+    # Try multiple strategies
+    strategies = [
+        # Strategy 1: Use shutil.rmtree with onerror handler
+        lambda: shutil.rmtree(dir_path, onerror=_remove_readonly),
+        
+        # Strategy 2: Manual recursive removal with retries
+        lambda: _manual_cleanup_with_retries(dir_path, max_retries, delay),
+        
+        # Strategy 3: Rename and recreate (last resort)
+        lambda: _rename_and_recreate(dir_path)
+    ]
+    
+    for strategy in strategies:
+        try:
+            strategy()
+            return  # Success
+        except Exception as e:
+            print(f"[CLEAN] Strategy failed: {e}")
+            continue
+    
+    # If all strategies fail, raise the last exception
+    raise OSError(f"Failed to clean up directory {dir_path} after trying all strategies")
+
+
+def _manual_cleanup_with_retries(dir_path, max_retries, delay):
+    """Manually clean up directory with retries for each file/directory"""
+    for root, dirs, files in os.walk(dir_path, topdown=False):
+        # Remove files first
+        for file in files:
+            file_path = os.path.join(root, file)
+            for attempt in range(max_retries):
+                try:
+                    if os.path.exists(file_path):  # Check if still exists
+                        os.chmod(file_path, 0o666)  # Make writable
+                        os.remove(file_path)
+                    break
+                except OSError:
+                    if attempt < max_retries - 1:
+                        time.sleep(delay)
+                    else:
+                        raise
+        
+        # Remove directories
+        for dir_name in dirs:
+            dir_full_path = os.path.join(root, dir_name)
+            for attempt in range(max_retries):
+                try:
+                    if os.path.exists(dir_full_path):
+                        os.rmdir(dir_full_path)
+                    break
+                except OSError:
+                    if attempt < max_retries - 1:
+                        time.sleep(delay)
+                    else:
+                        raise
+    
+    # Finally remove the root directory
+    for attempt in range(max_retries):
+        try:
+            if os.path.exists(dir_path):
+                os.rmdir(dir_path)
+            break
+        except OSError:
+            if attempt < max_retries - 1:
+                time.sleep(delay)
+            else:
+                raise
+
+
+def _rename_and_recreate(dir_path):
+    """Last resort: rename the directory and create a new one"""
+    import tempfile
+    import shutil
+    
+    # Generate a unique temporary name
+    temp_name = None
+    for i in range(100):  # Try up to 100 times
+        try:
+            temp_name = f"{dir_path}_old_{i}_{int(time.time())}"
+            if not os.path.exists(temp_name):
+                os.rename(dir_path, temp_name)
+                break
+        except OSError:
+            continue
+    else:
+        raise OSError("Could not rename directory for cleanup")
+    
+    # Try to remove the renamed directory in background (don't wait)
+    try:
+        shutil.rmtree(temp_name)
+    except OSError:
+        # If we can't remove it, at least it's renamed out of the way
+        pass
 
 
 def create_parser():
@@ -206,24 +325,16 @@ def main():
             try:
                 import shutil
                 shutil.rmtree(compilation_report_dir)
+                print("[CLEAN] Cleanup completed successfully")
             except (OSError, PermissionError) as e:
-                print(f"[WARN] Could not clean up old reports: {e}")
-                # Try to remove files individually
+                print(f"[WARN] Standard cleanup failed: {e}")
+                # Try robust Windows-compatible cleanup
                 try:
-                    for root, dirs, files in os.walk(compilation_report_dir, topdown=False):
-                        for file in files:
-                            try:
-                                os.remove(os.path.join(root, file))
-                            except OSError:
-                                pass
-                        for dir_name in dirs:
-                            try:
-                                os.rmdir(os.path.join(root, dir_name))
-                            except OSError:
-                                pass
-                    os.rmdir(compilation_report_dir)
-                except OSError:
-                    print("[WARN] Skipping cleanup due to permission issues")
+                    _robust_cleanup_directory(compilation_report_dir)
+                    print("[CLEAN] Robust cleanup completed")
+                except Exception as cleanup_error:
+                    print(f"[WARN] Robust cleanup also failed: {cleanup_error}")
+                    print("[WARN] Skipping cleanup - old reports may remain")
         os.makedirs(compilation_report_dir, exist_ok=True)
 
         # Process each file
