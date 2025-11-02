@@ -163,7 +163,7 @@ def main():
 
     api_key = args.api_key or os.getenv('GEMINI_API_KEY')
 
-    print("🚀 AI C Test Generator")
+    print("[START] AI C Test Generator")
     print(f"   Repository: {args.repo_path}")
     print(f"   Source dir: {args.source_dir}")
     print(f"   Output dir: {args.output}")
@@ -176,7 +176,7 @@ def main():
 
         # Build dependency map
         if args.verbose:
-            print("📋 Building dependency map...")
+            print("[BUILD] Building dependency map...")
         dependency_map = generator.build_dependency_map(args.repo_path)
 
         # Find C files in source directory (excluding main.c)
@@ -193,7 +193,7 @@ def main():
                     c_files.append(os.path.join(root, file))
 
         if args.verbose:
-            print(f"📁 Found {len(c_files)} C files to process")
+            print(f"[FOUND] Found {len(c_files)} C files to process")
 
         # Create output directory
         output_dir = os.path.join(args.repo_path, args.output)
@@ -234,7 +234,7 @@ def main():
         for file_path in c_files:
             rel_path = os.path.relpath(file_path, args.repo_path)
             file_start_time = time.time()
-            print(f"🎯 Processing: {rel_path}")
+            print(f"[PROC] Processing: {rel_path}")
 
             max_attempts = args.max_regeneration_attempts + 1  # +1 for initial generation
             attempt = 0
@@ -270,7 +270,7 @@ def main():
                     )
 
                     # Print validation summary
-                    status = "✅" if validation_result['compiles'] and validation_result['realistic'] else "⚠️"
+                    status = "[OK]" if validation_result['compiles'] and validation_result['realistic'] else "[WARN]"
                     quality = validation_result['quality']
                     compiles = 'Compiles' if validation_result['compiles'] else 'Broken'
                     realistic = 'Realistic' if validation_result['realistic'] else 'Unrealistic'
@@ -315,24 +315,24 @@ def main():
                 if attempt > 1:
                     regeneration_stats['successful_regenerations'] += 1
 
-                print(f"   ✅ Final: {os.path.basename(final_result['test_file'])} ({final_validation['quality']} quality)")
+                print(f"   [FINAL] Final: {os.path.basename(final_result['test_file'])} ({final_validation['quality']} quality)")
             else:
                 print(f"   ❌ Failed to generate acceptable test for {rel_path}")
 
             # Print timing for this file
             file_duration = time.time() - file_start_time
-            print(f"   ⏱️  Completed in {file_duration:.1f}s")
+            print(f"   [TIME] Completed in {file_duration:.1f}s")
 
         # Save validation reports
         if validation_reports:
-            print(f"\n📊 Saving validation reports...")
+            print(f"\n[SAVE] Saving validation reports...")
             report_dir = os.path.join(args.repo_path, args.output, "compilation_report")
 
             for report in validation_reports:
                 validator.save_validation_report(report, report_dir)
 
         # Print summary
-        print(f"\n🎉 COMPLETED!")
+        print(f"\n[DONE] COMPLETED!")
         print(f"   Generated: {successful_generations}/{len(c_files)} files")
         print(f"   Tests saved to: {output_dir}")
         if validation_reports:
