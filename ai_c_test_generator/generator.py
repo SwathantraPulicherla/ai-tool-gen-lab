@@ -96,25 +96,14 @@ class SmartTestGenerator:
 
     def _initialize_model(self):
         """Initialize the best available model"""
-        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-        
-        def init_model_with_timeout(model_name):
-            return genai.GenerativeModel(model_name)
-        
         for model_name in self.models_to_try:
             try:
-                # Use ThreadPoolExecutor for cross-platform timeout
-                with ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(init_model_with_timeout, model_name)
-                    self.model = future.result(timeout=30)  # 30 second timeout
-                    self.current_model_name = model_name
-                    print(f"✅ Using model: {model_name}")
-                    break
-            except FuturesTimeoutError:
-                print(f"[WARN] Model {model_name} initialization timed out after 30 seconds")
-                continue
+                self.model = genai.GenerativeModel(model_name)
+                self.current_model_name = model_name
+                print(f"✅ [OK] Using model: {model_name}")
+                break
             except Exception as e:
-                print(f"[WARN] Model {model_name} failed: {e}")
+                print(f"⚠️ [WARN] Model {model_name} failed: {e}")
                 continue
 
         if self.model is None:
@@ -141,12 +130,12 @@ class SmartTestGenerator:
 
                 if is_rate_limit and attempt < max_retries - 1:
                     wait_time = (2 ** attempt) + 1  # Exponential backoff: 1s, 3s, 7s
-                    print(f"[WARN] Rate limit hit on {self.current_model_name}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
+                    print(f"⚠️ [WARN] Rate limit hit on {self.current_model_name}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
                     time.sleep(wait_time)
                     continue
                 elif is_rate_limit:
                     # Rate limit persists, try fallback models
-                    print(f"[WARN] {self.current_model_name} persistently rate limited, trying fallback models...")
+                    print(f"⚠️ [WARN] {self.current_model_name} persistently rate limited, trying fallback models...")
                     break
                 else:
                     # Not a rate limit error, re-raise immediately
@@ -159,18 +148,18 @@ class SmartTestGenerator:
                 continue  # Skip the model that just failed
 
             try:
-                print(f"🔄 Trying fallback model: {model_name}")
+                print(f"🔄 [GEN] Trying fallback model: {model_name}")
                 fallback_model = genai.GenerativeModel(model_name)
                 response = fallback_model.generate_content(prompt)
 
                 # If successful, switch to this model for future requests
                 self.model = fallback_model
                 self.current_model_name = model_name
-                print(f"[OK] Switched to model: {model_name}")
+                print(f"✅ [OK] Switched to model: {model_name}")
                 return response
 
             except Exception as fallback_error:
-                print(f"[ERROR] Fallback model {model_name} also failed: {fallback_error}")
+                print(f"❌ [ERROR] Fallback model {model_name} also failed: {fallback_error}")
                 continue
 
         # If all attempts failed, raise the last error
@@ -178,12 +167,11 @@ class SmartTestGenerator:
 
     def build_dependency_map(self, repo_path: str) -> Dict[str, str]:
         """Build a map of function_name -> source_file for the entire repository"""
-        print("[DEPS] Building global dependency map...")
+        print("📋 [DEPS] Building global dependency map...")
         analyzer = DependencyAnalyzer(repo_path)
         all_c_files = analyzer.find_all_c_files()
 
         dependency_map = {}
-
         for file_path in all_c_files:
             functions = analyzer._extract_functions(file_path)
             for func in functions:
@@ -210,22 +198,18 @@ class SmartTestGenerator:
                 dependency_map[called_func] != file_path):
                 functions_that_need_stubs.append(called_func)
 
-        print(f"   [DEPS] {os.path.basename(file_path)}: {len(analysis['functions'])} functions, {len(functions_that_need_stubs)} need stubs")
+        print(f"   📋 {os.path.basename(file_path)}: {len(analysis['functions'])} functions, {len(functions_that_need_stubs)} need stubs")
 
         # Build targeted prompt for this file only
         prompt = self._build_targeted_prompt(analysis, functions_that_need_stubs, repo_path, validation_feedback)
 
         # Generate tests using modern API with fallback support
         try:
-            print(f"   [AI] Calling {self.current_model_name} API...")
             response = self._try_generate_with_fallback(prompt)
-            print(f"   [AI] API response received, processing...")
             test_code = response.text.strip()
 
             # POST-PROCESSING: Clean up common AI generation issues
-            print(f"   [POST] Post-processing generated code...")
             test_code = self._post_process_test_code(test_code, analysis, analysis['includes'])
-            print(f"   [SAVE] Saving test file...")
 
             # Save test file
             test_filename = f"test_{os.path.basename(file_path)}"
@@ -235,7 +219,6 @@ class SmartTestGenerator:
             with open(output_path, 'w') as f:
                 f.write(test_code)
 
-            print(f"   [DONE] Test file saved: {test_filename}")
             return {'success': True, 'test_file': output_path}
 
         except Exception as e:
@@ -640,5 +623,5 @@ Generate complete, compilable C test code.
             return validated_tests
 
         except Exception as e:
-            print(f"[ERROR] Test generation failed: {e}")
+            print(f"❌ [ERROR] Test generation failed: {e}")
             return ""

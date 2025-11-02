@@ -5,9 +5,7 @@ CLI interface for AI C Test Generator
 
 import argparse
 import os
-import shutil
 import sys
-import time
 from pathlib import Path
 
 # Add compatibility for older Python versions
@@ -124,13 +122,13 @@ def validate_environment(args):
     """Validate environment and arguments"""
     # Check repository path
     if not os.path.exists(args.repo_path):
-        print(f"[ERROR] Repository path '{args.repo_path}' does not exist")
+        print(f"❌ Repository path '{args.repo_path}' does not exist")
         return False
 
     # Check for C files in source directory
     source_path = os.path.join(args.repo_path, args.source_dir)
     if not os.path.exists(source_path):
-        print(f"[ERROR] Source directory '{source_path}' does not exist")
+        print(f"❌ Source directory '{source_path}' does not exist")
         return False
 
     # Check for C files
@@ -141,13 +139,13 @@ def validate_environment(args):
                 c_files.append(os.path.join(root, file))
 
     if not c_files:
-        print(f"[ERROR] No C files found in '{source_path}'")
+        print(f"❌ No C files found in '{source_path}'")
         return False
 
     # Check API key
     api_key = args.api_key or os.getenv('GEMINI_API_KEY')
     if not api_key:
-        print("[ERROR] Set GEMINI_API_KEY environment variable or use --api-key")
+        print("❌ Set GEMINI_API_KEY environment variable or use --api-key")
         print("   Get your API key from: https://makersuite.google.com/app/apikey")
         return False
 
@@ -156,6 +154,7 @@ def validate_environment(args):
 
 def main():
     """Main CLI entry point"""
+    print("🔄 [INFO] AI C Test Generator CLI started, initializing...")
     parser = create_parser()
     args = parser.parse_args()
 
@@ -172,12 +171,13 @@ def main():
 
     try:
         # Initialize components
+        print("🔄 [INFO] Initializing Gemini model and validator...")
         generator = SmartTestGenerator(api_key, args.repo_path, redact_sensitive=args.redact_sensitive)
         validator = TestValidator(args.repo_path)
 
         # Build dependency map
         if args.verbose:
-            print("🔧 Building dependency map...")
+            print("📋 Building dependency map...")
         dependency_map = generator.build_dependency_map(args.repo_path)
 
         # Find C files in source directory (excluding main.c)
@@ -189,12 +189,12 @@ def main():
                     # Skip main.c as it's not suitable for unit testing
                     if file == 'main.c':
                         if args.verbose:
-                            print(f"[SKIP] Skipping main.c (application entry point)")
+                            print(f"⏭️ Skipping main.c (application entry point)")
                         continue
                     c_files.append(os.path.join(root, file))
 
         if args.verbose:
-            print(f"[FOUND] Found {len(c_files)} C files to process")
+            print(f"📁 Found {len(c_files)} C files to process")
 
         # Create output directory
         output_dir = os.path.join(args.repo_path, args.output)
@@ -205,12 +205,26 @@ def main():
         if os.path.exists(compilation_report_dir):
             print("🧹 Cleaning up old compilation reports...")
             try:
-                # Simple and fast cleanup - just remove the directory
-                shutil.rmtree(compilation_report_dir, ignore_errors=True)
-                print("🧹 Cleanup completed successfully")
-            except Exception as e:
-                print(f"[WARN] Cleanup failed: {e}")
-                # Don't try complex recovery - just warn and continue
+                import shutil
+                shutil.rmtree(compilation_report_dir)
+            except (OSError, PermissionError) as e:
+                print(f"⚠️ Could not clean up old reports: {e}")
+                # Try to remove files individually
+                try:
+                    for root, dirs, files in os.walk(compilation_report_dir, topdown=False):
+                        for file in files:
+                            try:
+                                os.remove(os.path.join(root, file))
+                            except OSError:
+                                pass
+                        for dir_name in dirs:
+                            try:
+                                os.rmdir(os.path.join(root, dir_name))
+                            except OSError:
+                                pass
+                    os.rmdir(compilation_report_dir)
+                except OSError:
+                    print("⚠️ Skipping cleanup due to permission issues")
         os.makedirs(compilation_report_dir, exist_ok=True)
 
         # Process each file
@@ -220,8 +234,7 @@ def main():
 
         for file_path in c_files:
             rel_path = os.path.relpath(file_path, args.repo_path)
-            file_start_time = time.time()
-            print(f"⚙️ Processing: {rel_path}")
+            print(f"🎯 Processing: {rel_path}")
 
             max_attempts = args.max_regeneration_attempts + 1  # +1 for initial generation
             attempt = 0
@@ -232,24 +245,18 @@ def main():
                 attempt += 1
                 try:
                     # Generate tests for this file
-                    if args.verbose:
-                        print(f"   🤖 Starting AI test generation for {os.path.basename(file_path)}...")
                     result = generator.generate_tests_for_file(
                         file_path, args.repo_path, output_dir, dependency_map, final_validation if attempt > 1 else None
                     )
-                    if args.verbose and result['success']:
-                        print(f"   🤖 AI generation completed, post-processing...")
 
                     if not result['success']:
-                        print(f"   [ERROR] Generation failed: {result['error']}")
+                        print(f"   ❌ Generation failed: {result['error']}")
                         break
 
                     # Validate the generated test
                     if args.verbose:
                         print(f"   🔍 Validating (attempt {attempt})...")
                     validation_result = validator.validate_test_file(result['test_file'], file_path)
-                    if args.verbose:
-                        print(f"   🔍 Validation completed: {validation_result['quality']} quality")
 
                     # Check if regeneration is needed based on quality threshold
                     quality_levels = {'low': 0, 'medium': 1, 'high': 2}
@@ -263,7 +270,7 @@ def main():
                     )
 
                     # Print validation summary
-                    status = "[OK]" if validation_result['compiles'] and validation_result['realistic'] else "[WARN]"
+                    status = "✅" if validation_result['compiles'] and validation_result['realistic'] else "⚠️"
                     quality = validation_result['quality']
                     compiles = 'Compiles' if validation_result['compiles'] else 'Broken'
                     realistic = 'Realistic' if validation_result['realistic'] else 'Unrealistic'
@@ -296,7 +303,7 @@ def main():
                         break
 
                 except Exception as e:
-                    print(f"   [ERROR] Error processing {rel_path}: {str(e)}")
+                    print(f"   ❌ Error processing {rel_path}: {str(e)}")
                     break
 
             # Process final result
@@ -308,35 +315,31 @@ def main():
                 if attempt > 1:
                     regeneration_stats['successful_regenerations'] += 1
 
-                print(f"   🎯 Final: {os.path.basename(final_result['test_file'])} ({final_validation['quality']} quality)")
+                print(f"   ✅ [OK] Final: {os.path.basename(final_result['test_file'])} ({final_validation['quality']} quality)")
             else:
-                print(f"   [ERROR] Failed to generate acceptable test for {rel_path}")
-
-            # Print timing for this file
-            file_duration = time.time() - file_start_time
-            print(f"   ⏱️ Completed in {file_duration:.1f}s")
+                print(f"   ❌ [ERROR] Failed to generate acceptable test for {rel_path}")
 
         # Save validation reports
         if validation_reports:
-            print(f"\n💾 Saving validation reports...")
+            print(f"\n📊 [POST] Saving validation reports...")
             report_dir = os.path.join(args.repo_path, args.output, "compilation_report")
 
             for report in validation_reports:
                 validator.save_validation_report(report, report_dir)
 
         # Print summary
-        print(f"\n🎉 COMPLETED!")
-        print(f"   Generated: {successful_generations}/{len(c_files)} files")
-        print(f"   Tests saved to: {output_dir}")
+        print(f"\n🎉 [DONE] COMPLETED!")
+        print(f"   ✅ [OK] Generated: {successful_generations}/{len(c_files)} files")
+        print(f"   💾 [SAVE] Tests saved to: {output_dir}")
         if validation_reports:
-            print(f"   Reports saved to: {os.path.join(args.output, 'compilation_report')}")
+            print(f"   💾 [SAVE] Reports saved to: {os.path.join(args.output, 'compilation_report')}")
 
         # Print regeneration statistics
         if args.regenerate_on_low_quality:
-            print(f"   Regenerations: {regeneration_stats['successful_regenerations']}/{regeneration_stats['total_regenerations']} successful")
+            print(f"   🔄 [GEN] Regenerations: {regeneration_stats['successful_regenerations']}/{regeneration_stats['total_regenerations']} successful")
             if regeneration_stats['total_regenerations'] > 0:
                 success_rate = (regeneration_stats['successful_regenerations'] / regeneration_stats['total_regenerations']) * 100
-                print(f"   Regeneration success rate: {success_rate:.1f}%")
+                print(f"   🔄 [GEN] Regeneration success rate: {success_rate:.1f}%")
 
         # Check quality of all generated tests
         quality_levels = {'low': 0, 'medium': 1, 'high': 2}
@@ -361,31 +364,31 @@ def main():
         if low_quality_tests:
             if args.regenerate_on_low_quality:
                 # When regeneration is enabled, warn but don't fail
-                print(f"[WARN] {len(low_quality_tests)} test(s) still below {args.quality_threshold} quality threshold after regeneration:")
+                print(f"⚠️ [WARN] {len(low_quality_tests)} test(s) still below {args.quality_threshold} quality threshold after regeneration:")
                 for test_file in low_quality_tests:
-                    print(f"   - {test_file}")
-                print("[TIP] Consider increasing --max-regeneration-attempts or relaxing --quality-threshold")
+                    print(f"   ⚠️ [WARN] - {test_file}")
+                print("💡 [INFO] Consider increasing --max-regeneration-attempts or relaxing --quality-threshold")
             else:
                 # When regeneration is disabled, strict enforcement
-                print(f"[ERROR] {len(low_quality_tests)} test(s) failed to meet {args.quality_threshold} quality threshold:")
+                print(f"❌ [ERROR] {len(low_quality_tests)} test(s) failed to meet {args.quality_threshold} quality threshold:")
                 for test_file in low_quality_tests:
-                    print(f"   - {test_file}")
-                print("[TIP] Use --regenerate-on-low-quality to automatically improve test quality")
+                    print(f"   ❌ [ERROR] - {test_file}")
+                print("💡 [INFO] Use --regenerate-on-low-quality to automatically improve test quality")
                 sys.exit(1)
 
         # Overall success check
         if successful_generations == 0:
-            print("[ERROR] No tests were successfully generated")
+            print("❌ [ERROR] No tests were successfully generated")
             sys.exit(1)
         elif successful_generations < len(c_files):
-            print("[WARN] Some files failed to generate tests - check validation reports")
+            print("⚠️ Some files failed to generate tests - check validation reports")
             sys.exit(1)
 
     except KeyboardInterrupt:
-        print("\n[STOP] Interrupted by user")
+        print("\n⏹️ Interrupted by user")
         sys.exit(1)
     except Exception as e:
-        print(f"[ERROR] Fatal error: {str(e)}")
+        print(f"❌ Fatal error: {str(e)}")
         if args.verbose:
             import traceback
             traceback.print_exc()
