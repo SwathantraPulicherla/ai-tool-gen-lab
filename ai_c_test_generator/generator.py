@@ -100,10 +100,10 @@ class SmartTestGenerator:
             try:
                 self.model = genai.GenerativeModel(model_name)
                 self.current_model_name = model_name
-                print(f"✅ Using model: {model_name}")
+                print(f"[OK] Using model: {model_name}")
                 break
             except Exception as e:
-                print(f"⚠️  Model {model_name} failed: {e}")
+                print(f"[WARN] Model {model_name} failed: {e}")
                 continue
 
         if self.model is None:
@@ -130,12 +130,12 @@ class SmartTestGenerator:
 
                 if is_rate_limit and attempt < max_retries - 1:
                     wait_time = (2 ** attempt) + 1  # Exponential backoff: 1s, 3s, 7s
-                    print(f"⚠️  Rate limit hit on {self.current_model_name}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
+                    print(f"[WARN] Rate limit hit on {self.current_model_name}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
                     time.sleep(wait_time)
                     continue
                 elif is_rate_limit:
                     # Rate limit persists, try fallback models
-                    print(f"⚠️  {self.current_model_name} persistently rate limited, trying fallback models...")
+                    print(f"[WARN] {self.current_model_name} persistently rate limited, trying fallback models...")
                     break
                 else:
                     # Not a rate limit error, re-raise immediately
@@ -155,11 +155,11 @@ class SmartTestGenerator:
                 # If successful, switch to this model for future requests
                 self.model = fallback_model
                 self.current_model_name = model_name
-                print(f"✅ Switched to model: {model_name}")
+                print(f"[OK] Switched to model: {model_name}")
                 return response
 
             except Exception as fallback_error:
-                print(f"❌ Fallback model {model_name} also failed: {fallback_error}")
+                print(f"[ERROR] Fallback model {model_name} also failed: {fallback_error}")
                 continue
 
         # If all attempts failed, raise the last error
@@ -624,5 +624,5 @@ Generate complete, compilable C test code.
             return validated_tests
 
         except Exception as e:
-            print(f"❌ Test generation failed: {e}")
+            print(f"[ERROR] Test generation failed: {e}")
             return ""

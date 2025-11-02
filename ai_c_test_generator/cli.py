@@ -123,13 +123,13 @@ def validate_environment(args):
     """Validate environment and arguments"""
     # Check repository path
     if not os.path.exists(args.repo_path):
-        print(f"❌ Repository path '{args.repo_path}' does not exist")
+        print(f"[ERROR] Repository path '{args.repo_path}' does not exist")
         return False
 
     # Check for C files in source directory
     source_path = os.path.join(args.repo_path, args.source_dir)
     if not os.path.exists(source_path):
-        print(f"❌ Source directory '{source_path}' does not exist")
+        print(f"[ERROR] Source directory '{source_path}' does not exist")
         return False
 
     # Check for C files
@@ -140,13 +140,13 @@ def validate_environment(args):
                 c_files.append(os.path.join(root, file))
 
     if not c_files:
-        print(f"❌ No C files found in '{source_path}'")
+        print(f"[ERROR] No C files found in '{source_path}'")
         return False
 
     # Check API key
     api_key = args.api_key or os.getenv('GEMINI_API_KEY')
     if not api_key:
-        print("❌ Set GEMINI_API_KEY environment variable or use --api-key")
+        print("[ERROR] Set GEMINI_API_KEY environment variable or use --api-key")
         print("   Get your API key from: https://makersuite.google.com/app/apikey")
         return False
 
@@ -250,7 +250,7 @@ def main():
                     )
 
                     if not result['success']:
-                        print(f"   ❌ Generation failed: {result['error']}")
+                        print(f"   [ERROR] Generation failed: {result['error']}")
                         break
 
                     # Validate the generated test
@@ -303,7 +303,7 @@ def main():
                         break
 
                 except Exception as e:
-                    print(f"   ❌ Error processing {rel_path}: {str(e)}")
+                    print(f"   [ERROR] Error processing {rel_path}: {str(e)}")
                     break
 
             # Process final result
@@ -317,7 +317,7 @@ def main():
 
                 print(f"   [FINAL] Final: {os.path.basename(final_result['test_file'])} ({final_validation['quality']} quality)")
             else:
-                print(f"   ❌ Failed to generate acceptable test for {rel_path}")
+                print(f"   [ERROR] Failed to generate acceptable test for {rel_path}")
 
             # Print timing for this file
             file_duration = time.time() - file_start_time
@@ -374,7 +374,7 @@ def main():
                 print("💡 Consider increasing --max-regeneration-attempts or relaxing --quality-threshold")
             else:
                 # When regeneration is disabled, strict enforcement
-                print(f"❌ {len(low_quality_tests)} test(s) failed to meet {args.quality_threshold} quality threshold:")
+                print(f"[ERROR] {len(low_quality_tests)} test(s) failed to meet {args.quality_threshold} quality threshold:")
                 for test_file in low_quality_tests:
                     print(f"   - {test_file}")
                 print("💡 Use --regenerate-on-low-quality to automatically improve test quality")
@@ -382,17 +382,17 @@ def main():
 
         # Overall success check
         if successful_generations == 0:
-            print("❌ No tests were successfully generated")
+            print("[ERROR] No tests were successfully generated")
             sys.exit(1)
         elif successful_generations < len(c_files):
             print("⚠️ Some files failed to generate tests - check validation reports")
             sys.exit(1)
 
     except KeyboardInterrupt:
-        print("\n⏹️ Interrupted by user")
+        print("\n[STOP] Interrupted by user")
         sys.exit(1)
     except Exception as e:
-        print(f"❌ Fatal error: {str(e)}")
+        print(f"[ERROR] Fatal error: {str(e)}")
         if args.verbose:
             import traceback
             traceback.print_exc()
