@@ -207,6 +207,18 @@ export GEMINI_API_KEY=your_api_key_here
 ai-c-testgen --api-key your_api_key_here
 ```
 
+### GitHub Repository Secrets (For CI/CD)
+For automated testing via GitHub Actions, configure the API key as a repository secret:
+
+1. Go to your GitHub repository
+2. Navigate to **Settings** → **Secrets and variables** → **Actions**
+3. Click **New repository secret**
+4. Name: `GEMINI_API_KEY`
+5. Value: Your Google Gemini API key
+6. Click **Add secret**
+
+The CI/CD workflows will automatically use this secret for test generation and execution.
+
 ### .env File
 Create a `.env` file in your project root:
 ```

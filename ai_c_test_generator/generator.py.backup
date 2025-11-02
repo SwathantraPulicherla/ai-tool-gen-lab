@@ -94,76 +94,62 @@ class SmartTestGenerator:
             """
         }
 
-    def _initialize_model(self):
-        """Initialize the best available model"""
-        for model_name in self.models_to_try:
-            try:
-                self.model = genai.GenerativeModel(model_name)
-                self.current_model_name = model_name
-                print(f"✅ Using model: {model_name}")
-                break
-            except Exception as e:
-                print(f"⚠️  Model {model_name} failed: {e}")
-                continue
+        # Enhanced embedded-specific prompts
+        self.embedded_prompts = {
+            'hardware_registers': """
+            Generate comprehensive tests for hardware register access:
+            - Test volatile register reads/writes
+            - Verify memory-mapped I/O operations
+            - Test register bit manipulation
+            - Check boundary conditions and invalid values
+            - Test atomic operations where applicable
+            """,
 
-        if self.model is None:
-            raise Exception("No compatible Gemini model found. Please check your API key and internet connection.")
+            'bit_fields': """
+            Generate tests for bit field operations:
+            - Test individual bit field access
+            - Verify bit field packing/unpacking
+            - Test bit field boundary conditions
+            - Check endianness handling
+            - Test bit field arithmetic operations
+            """,
 
-    def _try_generate_with_fallback(self, prompt: str, max_retries: int = 3):
-        """Try to generate content with automatic model fallback and retry logic"""
-        last_error = None
+            'state_machines': """
+            Generate tests for state machine implementations:
+            - Test all valid state transitions
+            - Verify invalid transition handling
+            - Test state machine initialization
+            - Check state persistence across operations
+            - Test concurrent state access (if applicable)
+            """,
 
-        # First try with current model, with retries
-        for attempt in range(max_retries):
-            try:
-                response = self.model.generate_content(prompt)
-                return response
-            except Exception as e:
-                error_str = str(e).lower()
-                last_error = e
+            'safety_critical': """
+            Generate tests for safety-critical functions:
+            - Test TMR (Triple Modular Redundancy) voting
+            - Verify watchdog timer operations
+            - Test fault detection and recovery
+            - Check power supply redundancy
+            - Test error handling and logging
+            """,
 
-                # Check if it's a rate limit or quota error
-                is_rate_limit = any(keyword in error_str for keyword in [
-                    'rate limit', 'quota', 'limit exceeded', 'resource exhausted',
-                    '429', 'too many requests'
-                ])
+            'interrupt_handlers': """
+            Generate tests for interrupt service routines:
+            - Test interrupt context switching
+            - Verify interrupt priority handling
+            - Test nested interrupt scenarios
+            - Check interrupt flag management
+            - Test interrupt latency requirements
+            """,
 
-                if is_rate_limit and attempt < max_retries - 1:
-                    wait_time = (2 ** attempt) + 1  # Exponential backoff: 1s, 3s, 7s
-                    print(f"⚠️  Rate limit hit on {self.current_model_name}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
-                    time.sleep(wait_time)
-                    continue
-                elif is_rate_limit:
-                    # Rate limit persists, try fallback models
-                    print(f"⚠️  {self.current_model_name} persistently rate limited, trying fallback models...")
-                    break
-                else:
-                    # Not a rate limit error, re-raise immediately
-                    raise e
-
-        # Try fallback models if we got here due to rate limits
-        original_model = self.current_model_name
-        for model_name in self.models_to_try:
-            if model_name == original_model:
-                continue  # Skip the model that just failed
-
-            try:
-                print(f"🔄 Trying fallback model: {model_name}")
-                fallback_model = genai.GenerativeModel(model_name)
-                response = fallback_model.generate_content(prompt)
-
-                # If successful, switch to this model for future requests
-                self.model = fallback_model
-                self.current_model_name = model_name
-                print(f"✅ Switched to model: {model_name}")
-                return response
-
-            except Exception as fallback_error:
-                print(f"❌ Fallback model {model_name} also failed: {fallback_error}")
-                continue
-
-        # If all attempts failed, raise the last error
-        raise last_error or Exception("All models failed and no fallback available")
+            'dma_operations': """
+            Generate tests for DMA transfer operations:
+            - Test DMA channel configuration
+            - Verify data transfer integrity
+            - Test DMA interrupt handling
+            - Check DMA buffer management
+            - Test error recovery scenarios
+            """
+        }
 
     def generate_embedded_tests(self, source_code: str, function_name: str,
                                function_info: Dict) -> str:
@@ -187,7 +173,7 @@ class SmartTestGenerator:
 
         # Generate tests using AI with embedded context
         try:
-            response = self._try_generate_with_fallback(prompt)
+            response = self.model.generate_content(prompt)
             generated_tests = response.text
 
             # Post-process for embedded-specific patterns

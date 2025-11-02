@@ -170,7 +170,7 @@ def main():
 
     try:
         # Initialize components
-        generator = SmartTestGenerator(api_key, redact_sensitive=args.redact_sensitive)
+        generator = SmartTestGenerator(api_key, args.repo_path, redact_sensitive=args.redact_sensitive)
         validator = TestValidator(args.repo_path)
 
         # Build dependency map
