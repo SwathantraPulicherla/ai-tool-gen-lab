@@ -4,8 +4,8 @@ import json
 from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 import google.generativeai as genai
-from analyzer import DependencyAnalyzer
-from validator import TestValidator
+from .analyzer import DependencyAnalyzer
+from .validator import TestValidator
 
 class SmartTestGenerator:
     """

@@ -6,7 +6,7 @@ import os
 import re
 from typing import Dict, List
 
-from analyzer import DependencyAnalyzer
+from .analyzer import DependencyAnalyzer
 
 
 class TestValidator:
