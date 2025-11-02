@@ -100,7 +100,7 @@ class SmartTestGenerator:
             try:
                 self.model = genai.GenerativeModel(model_name)
                 self.current_model_name = model_name
-                print(f"[OK] Using model: {model_name}")
+                print(f"✅ Using model: {model_name}")
                 break
             except Exception as e:
                 print(f"[WARN] Model {model_name} failed: {e}")

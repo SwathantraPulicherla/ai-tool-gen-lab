@@ -164,7 +164,7 @@ def main():
 
     api_key = args.api_key or os.getenv('GEMINI_API_KEY')
 
-    print("[START] AI C Test Generator")
+    print("🚀 AI C Test Generator")
     print(f"   Repository: {args.repo_path}")
     print(f"   Source dir: {args.source_dir}")
     print(f"   Output dir: {args.output}")
@@ -177,7 +177,7 @@ def main():
 
         # Build dependency map
         if args.verbose:
-            print("[BUILD] Building dependency map...")
+            print("🔧 Building dependency map...")
         dependency_map = generator.build_dependency_map(args.repo_path)
 
         # Find C files in source directory (excluding main.c)
@@ -203,11 +203,11 @@ def main():
         # Clean up old compilation reports
         compilation_report_dir = os.path.join(output_dir, "compilation_report")
         if os.path.exists(compilation_report_dir):
-            print("[CLEAN] Cleaning up old compilation reports...")
+            print("🧹 Cleaning up old compilation reports...")
             try:
                 # Simple and fast cleanup - just remove the directory
                 shutil.rmtree(compilation_report_dir, ignore_errors=True)
-                print("[CLEAN] Cleanup completed successfully")
+                print("🧹 Cleanup completed successfully")
             except Exception as e:
                 print(f"[WARN] Cleanup failed: {e}")
                 # Don't try complex recovery - just warn and continue
@@ -221,7 +221,7 @@ def main():
         for file_path in c_files:
             rel_path = os.path.relpath(file_path, args.repo_path)
             file_start_time = time.time()
-            print(f"[PROC] Processing: {rel_path}")
+            print(f"⚙️ Processing: {rel_path}")
 
             max_attempts = args.max_regeneration_attempts + 1  # +1 for initial generation
             attempt = 0
@@ -233,12 +233,12 @@ def main():
                 try:
                     # Generate tests for this file
                     if args.verbose:
-                        print(f"   [GEN] Starting AI test generation for {os.path.basename(file_path)}...")
+                        print(f"   🤖 Starting AI test generation for {os.path.basename(file_path)}...")
                     result = generator.generate_tests_for_file(
                         file_path, args.repo_path, output_dir, dependency_map, final_validation if attempt > 1 else None
                     )
                     if args.verbose and result['success']:
-                        print(f"   [GEN] AI generation completed, post-processing...")
+                        print(f"   🤖 AI generation completed, post-processing...")
 
                     if not result['success']:
                         print(f"   [ERROR] Generation failed: {result['error']}")
@@ -246,10 +246,10 @@ def main():
 
                     # Validate the generated test
                     if args.verbose:
-                        print(f"   [VALIDATE] Validating (attempt {attempt})...")
+                        print(f"   🔍 Validating (attempt {attempt})...")
                     validation_result = validator.validate_test_file(result['test_file'], file_path)
                     if args.verbose:
-                        print(f"   [VALIDATE] Validation completed: {validation_result['quality']} quality")
+                        print(f"   🔍 Validation completed: {validation_result['quality']} quality")
 
                     # Check if regeneration is needed based on quality threshold
                     quality_levels = {'low': 0, 'medium': 1, 'high': 2}
@@ -285,7 +285,7 @@ def main():
 
                     # Check if we should regenerate
                     if needs_regeneration:
-                        print(f"   [REGEN] Low quality detected, regenerating (attempt {attempt + 1}/{max_attempts})...")
+                        print(f"   🔄 Low quality detected, regenerating (attempt {attempt + 1}/{max_attempts})...")
                         regeneration_stats['total_regenerations'] += 1
                         # Remove the low-quality test file so it can be regenerated
                         if os.path.exists(result['test_file']):
@@ -308,24 +308,24 @@ def main():
                 if attempt > 1:
                     regeneration_stats['successful_regenerations'] += 1
 
-                print(f"   [FINAL] Final: {os.path.basename(final_result['test_file'])} ({final_validation['quality']} quality)")
+                print(f"   🎯 Final: {os.path.basename(final_result['test_file'])} ({final_validation['quality']} quality)")
             else:
                 print(f"   [ERROR] Failed to generate acceptable test for {rel_path}")
 
             # Print timing for this file
             file_duration = time.time() - file_start_time
-            print(f"   [TIME] Completed in {file_duration:.1f}s")
+            print(f"   ⏱️ Completed in {file_duration:.1f}s")
 
         # Save validation reports
         if validation_reports:
-            print(f"\n[SAVE] Saving validation reports...")
+            print(f"\n💾 Saving validation reports...")
             report_dir = os.path.join(args.repo_path, args.output, "compilation_report")
 
             for report in validation_reports:
                 validator.save_validation_report(report, report_dir)
 
         # Print summary
-        print(f"\n[DONE] COMPLETED!")
+        print(f"\n🎉 COMPLETED!")
         print(f"   Generated: {successful_generations}/{len(c_files)} files")
         print(f"   Tests saved to: {output_dir}")
         if validation_reports:
