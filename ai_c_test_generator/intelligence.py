@@ -198,27 +198,42 @@ class TestIntelligenceAnalyzer:
         passed_tests = sum(1 for result in test_results.values() if result.get('passed', False))
         failed_tests = total_tests - passed_tests
 
-        # Calculate quality score
-        base_score = (passed_tests / total_tests) * 100 if total_tests > 0 else 0
-
-        # Penalty for complexity of failures
+        # Calculate pass rate (0-100)
+        pass_rate = (passed_tests / total_tests) if total_tests > 0 else 0
+        
+        # Calculate quality score with transparent formula
+        # Formula: (pass_rate × 40%) + ((1 - failure_rate) × 30%) + (maintainability × 30%)
+        # Where maintainability is inversely proportional to fix complexity
+        
+        # Penalty for complexity of failures (affects maintainability score)
         complexity_penalty = 0
         for analysis in detailed_analysis:
-            if analysis['fix_complexity'] == 'HARD':
+            if analysis.get('fix_complexity') == 'HARD':
+                complexity_penalty += 10
+            elif analysis.get('fix_complexity') == 'MEDIUM':
                 complexity_penalty += 5
-            elif analysis['fix_complexity'] == 'MEDIUM':
+            elif analysis.get('fix_complexity') == 'EASY':
                 complexity_penalty += 2
 
-        quality_score = max(0, base_score - complexity_penalty)
+        # Maintainability score (0-100): higher complexity = lower maintainability
+        max_possible_penalty = len(detailed_analysis) * 10 if detailed_analysis else 1
+        maintainability_score = max(0, 100 - (complexity_penalty / max_possible_penalty * 100))
+        
+        # Calculate weighted quality score
+        quality_score = (pass_rate * 40) + ((1 - (failed_tests / total_tests if total_tests > 0 else 0)) * 30) + (maintainability_score * 0.3)
 
-        # Estimate coverage potential
-        coverage_potential = min(95, quality_score + 10)  # Assume 10% improvement potential
+        # Estimate coverage potential based on current quality and test improvements
+        # Current pass rate + potential improvement from fixing issues
+        coverage_potential = min(95, (pass_rate * 100) + (len(detailed_analysis) * 2))
 
-        # Calculate maintenance complexity
+        # Calculate maintenance complexity based on fix complexity distribution
         maintenance_complexity = 'LOW'
-        if complexity_penalty > 20:
+        hard_fixes = sum(1 for a in detailed_analysis if a.get('fix_complexity') == 'HARD')
+        medium_fixes = sum(1 for a in detailed_analysis if a.get('fix_complexity') == 'MEDIUM')
+        
+        if hard_fixes > 0 or complexity_penalty > 20:
             maintenance_complexity = 'HIGH'
-        elif complexity_penalty > 10:
+        elif medium_fixes > 2 or complexity_penalty > 10:
             maintenance_complexity = 'MEDIUM'
 
         return {
@@ -228,7 +243,9 @@ class TestIntelligenceAnalyzer:
             'total_tests': total_tests,
             'passed_tests': passed_tests,
             'failed_tests': failed_tests,
-            'failure_rate': round((failed_tests / total_tests) * 100, 1) if total_tests > 0 else 0
+            'failure_rate': round((failed_tests / total_tests) * 100, 1) if total_tests > 0 else 0,
+            'pass_rate': round(pass_rate * 100, 1),
+            'maintainability_score': round(maintainability_score, 1)
         }
 
     def _generate_executive_summary(self, intelligence_report: Dict) -> Dict:
@@ -237,43 +254,85 @@ class TestIntelligenceAnalyzer:
         quality_metrics = intelligence_report['quality_metrics']
         priority_fixes = intelligence_report['priority_fixes']
 
-        # Calculate time savings
-        total_fix_time = sum(int(re.search(r'(\d+)', fix['estimated_time']).group(1))
-                           for fix in priority_fixes[:5])  # Top 5 fixes
+        # Calculate time savings with transparent formula
+        # Manual debugging time: 30 minutes per failure (industry average without AI guidance)
+        # AI-guided fix time: Sum of estimated fix times from intelligence analysis
+        
+        manual_debugging_time_per_failure = 30
+        total_manual_time = quality_metrics['failed_tests'] * manual_debugging_time_per_failure
+        
+        # AI-guided time: sum of top priority fixes
+        ai_guided_time = 0
+        for fix in priority_fixes[:10]:  # Consider top 10 fixes
+            time_match = re.search(r'(\d+)', fix.get('estimated_time', '15 minutes'))
+            if time_match:
+                ai_guided_time += int(time_match.group(1))
+        
+        time_savings = total_manual_time - ai_guided_time
 
-        # Estimate manual debugging time (assume 30 min per failure without intelligence)
-        manual_debugging_time = quality_metrics['failed_tests'] * 30
-
-        time_savings = manual_debugging_time - total_fix_time
+        # Determine recommended fix order based on complexity distribution
+        complexity_order = []
+        for fix in priority_fixes[:5]:
+            complexity = fix.get('complexity', 'MEDIUM')
+            if complexity not in complexity_order:
+                complexity_order.append(complexity)
+        
+        recommended_order = ' → '.join(complexity_order) if complexity_order else 'N/A'
 
         return {
             'total_time_savings': f"{time_savings} minutes",
-            'recommended_fix_order': [fix['complexity'] for fix in priority_fixes[:3]],
+            'recommended_fix_order': recommended_order,
             'expected_final_coverage': quality_metrics['coverage_potential'],
             'quality_improvement_potential': f"{quality_metrics['coverage_potential'] - quality_metrics['quality_score']:.1f} points",
-            'top_priority_fixes': len([f for f in priority_fixes if f['complexity'] == 'EASY'])
+            'top_priority_fixes': len([f for f in priority_fixes if f.get('complexity') == 'EASY']),
+            'manual_debugging_time': f"{total_manual_time} minutes",
+            'ai_guided_fix_time': f"{ai_guided_time} minutes"
         }
 
     def _calculate_roi(self, intelligence_report: Dict) -> Dict:
-        """Calculate return on investment metrics"""
+        """Calculate return on investment metrics with transparent formulas"""
 
         exec_summary = intelligence_report['executive_summary']
         quality_metrics = intelligence_report['quality_metrics']
 
-        # Assume engineering cost of $50/hour
+        # Extract time savings in minutes
+        time_savings_match = re.search(r'(-?\d+)', exec_summary['total_time_savings'])
+        time_savings_minutes = int(time_savings_match.group(1)) if time_savings_match else 0
+        
+        # Convert to hours for dollar calculation
+        time_savings_hours = time_savings_minutes / 60
+        
+        # Engineering cost calculation
+        # Assumption: $50/hour average engineering rate
         hourly_rate = 50
-        time_savings_hours = int(re.search(r'(\d+)', exec_summary['total_time_savings']).group(1)) / 60
         dollar_savings = time_savings_hours * hourly_rate
 
-        # Calculate quality improvement ROI
+        # Quality improvement ROI calculation
+        # Formula: Quality points improved × $10 per point
+        # Rationale: Each quality point represents reduced technical debt and bug prevention
         quality_improvement = float(exec_summary['quality_improvement_potential'].split()[0])
-        quality_roi = quality_improvement * 10  # Assume $10 value per quality point
+        quality_roi = quality_improvement * 10
+
+        # Debugging efficiency calculation
+        # Formula: (Manual time - AI-guided time) / Manual time × 100
+        manual_time_match = re.search(r'(\d+)', exec_summary.get('manual_debugging_time', '0 minutes'))
+        ai_time_match = re.search(r'(\d+)', exec_summary.get('ai_guided_fix_time', '0 minutes'))
+        
+        manual_time = int(manual_time_match.group(1)) if manual_time_match else 1
+        ai_time = int(ai_time_match.group(1)) if ai_time_match else 0
+        
+        debugging_efficiency = ((manual_time - ai_time) / manual_time * 100) if manual_time > 0 else 0
 
         return {
             'engineering_time_saved': f"${dollar_savings:.0f}",
             'quality_improvement_value': f"${quality_roi:.0f}",
             'total_roi': f"${dollar_savings + quality_roi:.0f}",
-            'debugging_efficiency': f"{quality_metrics['failure_rate']:.1f}% faster debugging"
+            'debugging_efficiency': f"{debugging_efficiency:.1f}% faster debugging",
+            'calculation_basis': {
+                'hourly_rate': f"${hourly_rate}/hour",
+                'time_saved_hours': f"{time_savings_hours:.2f} hours",
+                'quality_value_per_point': '$10/point'
+            }
         }
 
     def _calculate_confidence_score(self, analysis: Dict) -> int:
@@ -299,31 +358,46 @@ class TestIntelligenceAnalyzer:
     def generate_intelligence_report(self, output_path: str, intelligence_report: Dict):
         """Generate a comprehensive markdown intelligence report"""
 
+        exec_summary = intelligence_report['executive_summary']
+        quality_metrics = intelligence_report['quality_metrics']
+        roi_analysis = intelligence_report['roi_analysis']
+        
+        # Calculate total estimated fix time for priority fixes
+        priority_fixes = intelligence_report['priority_fixes']
+        total_fix_time = 0
+        for fix in priority_fixes[:10]:
+            time_match = re.search(r'(\d+)', fix.get('estimated_time', '0'))
+            if time_match:
+                total_fix_time += int(time_match.group(1))
+
         report_content = f"""# Test Generation Intelligence Report
 
 ## Executive Summary
-- **Total time savings vs. manual**: {intelligence_report['executive_summary']['total_time_savings']}
-- **Recommended fix order**: {' → '.join(intelligence_report['executive_summary']['recommended_fix_order'])}
-- **Expected final coverage**: {intelligence_report['executive_summary']['expected_final_coverage']}%
+- **Total time savings vs. manual**: {exec_summary['total_time_savings']} (Manual: {exec_summary.get('manual_debugging_time', 'N/A')} vs AI-guided: {exec_summary.get('ai_guided_fix_time', 'N/A')})
+- **Recommended fix order**: {exec_summary['recommended_fix_order']}
+- **Expected final coverage**: {exec_summary['expected_final_coverage']}%
+- **Test Results**: {quality_metrics['passed_tests']}/{quality_metrics['total_tests']} passed ({quality_metrics['pass_rate']}%)
 
 ## Quality Metrics
-- **Code Quality Score**: {intelligence_report['quality_metrics']['quality_score']}/100
-- **Test Coverage Potential**: {intelligence_report['quality_metrics']['coverage_potential']}%
-- **Maintenance Complexity**: {intelligence_report['quality_metrics']['maintenance_complexity']}
-- **Failure Rate**: {intelligence_report['quality_metrics']['failure_rate']}%
+- **Code Quality Score**: {quality_metrics['quality_score']}/100
+  - Formula: (Pass Rate × 40%) + (Non-Failure Rate × 30%) + (Maintainability × 30%)
+  - Pass Rate: {quality_metrics['pass_rate']}% | Failure Rate: {quality_metrics['failure_rate']}% | Maintainability: {quality_metrics['maintainability_score']}/100
+- **Test Coverage Potential**: {quality_metrics['coverage_potential']}%
+- **Maintenance Complexity**: {quality_metrics['maintenance_complexity']}
+- **Failed Tests**: {quality_metrics['failed_tests']}/{quality_metrics['total_tests']} ({quality_metrics['failure_rate']}%)
 
 ## ROI Analysis
-- **Engineering time saved**: {intelligence_report['roi_analysis']['engineering_time_saved']}
-- **Quality improvement value**: {intelligence_report['roi_analysis']['quality_improvement_value']}
-- **Total ROI**: {intelligence_report['roi_analysis']['total_roi']}
-- **Debugging efficiency**: {intelligence_report['roi_analysis']['debugging_efficiency']}
+- **Engineering time saved**: {roi_analysis['engineering_time_saved']} (based on {roi_analysis['calculation_basis']['hourly_rate']} × {roi_analysis['calculation_basis']['time_saved_hours']})
+- **Quality improvement value**: {roi_analysis['quality_improvement_value']} (at {roi_analysis['calculation_basis']['quality_value_per_point']})
+- **Total ROI**: {roi_analysis['total_roi']}
+- **Debugging efficiency**: {roi_analysis['debugging_efficiency']}
 
-## Priority Fixes (Under 10 minutes total)
+## Priority Fixes (Estimated {total_fix_time} minutes total)
 
 """
 
         # Add priority fixes
-        easy_fixes = [f for f in intelligence_report['priority_fixes'] if f['complexity'] == 'EASY']
+        easy_fixes = [f for f in intelligence_report['priority_fixes'] if f.get('complexity') == 'EASY']
         for i, fix in enumerate(easy_fixes[:5], 1):
             report_content += f"""### {i}. {fix['test_name']} - {fix['estimated_time']}
 **Root Cause**: {fix['root_cause']}
