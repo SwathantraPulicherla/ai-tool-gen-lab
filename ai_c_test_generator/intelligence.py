@@ -386,5 +386,4 @@ class TestIntelligenceAnalyzer:
                     'priority_score': fix['priority_score'],
                     'root_cause': fix['root_cause'],
                     'impact': fix['impact']
-                })</content>
-<parameter name="filePath">c:\Users\SwathantraPulicherla\OneDrive - requisimus Holding GmbH\Desktop\AI_tools_project\workspaces\ai-tool-lab\ai-tool-gen-lab\ai_c_test_generator\intelligence.py
+                })
