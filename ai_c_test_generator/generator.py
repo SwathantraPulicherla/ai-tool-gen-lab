@@ -16,10 +16,11 @@ from .analyzer import DependencyAnalyzer
 class SmartTestGenerator:
     """AI-powered test generator using Google Gemini with embedded systems support"""
 
-    def __init__(self, api_key: str, repo_path: str = '.', redact_sensitive: bool = False):
+    def __init__(self, api_key: str, repo_path: str = '.', redact_sensitive: bool = False, max_api_retries: int = 5):
         genai.configure(api_key=api_key)
         self.repo_path = repo_path
         self.redact_sensitive = redact_sensitive
+        self.max_api_retries = max_api_retries
 
         # Use modern API (v0.8.0+) with gemini-2.5-flash as primary model
         self.models_to_try = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']
@@ -109,8 +110,10 @@ class SmartTestGenerator:
         if self.model is None:
             raise Exception("No compatible Gemini model found. Please check your API key and internet connection.")
 
-    def _try_generate_with_fallback(self, prompt: str, max_retries: int = 3):
+    def _try_generate_with_fallback(self, prompt: str, max_retries: int = None):
         """Try to generate content with automatic model fallback and retry logic"""
+        if max_retries is None:
+            max_retries = self.max_api_retries
         last_error = None
 
         # First try with current model, with retries
@@ -122,20 +125,32 @@ class SmartTestGenerator:
                 error_str = str(e).lower()
                 last_error = e
 
-                # Check if it's a rate limit or quota error
+                # Check if it's a rate limit, quota, or timeout error
                 is_rate_limit = any(keyword in error_str for keyword in [
                     'rate limit', 'quota', 'limit exceeded', 'resource exhausted',
                     '429', 'too many requests'
                 ])
 
-                if is_rate_limit and attempt < max_retries - 1:
-                    wait_time = (2 ** attempt) + 1  # Exponential backoff: 1s, 3s, 7s
-                    print(f"⚠️ [WARN] Rate limit hit on {self.current_model_name}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
+                is_timeout = any(keyword in error_str for keyword in [
+                    'timeout', '504', 'request timed out', 'deadline exceeded',
+                    'connection timeout', 'read timeout', 'gateway timeout',
+                    'service unavailable', '502', '503', 'upstream request timeout'
+                ])
+
+                if (is_rate_limit or is_timeout) and attempt < max_retries - 1:
+                    # Use longer backoff for timeouts (they might need more time to recover)
+                    if is_timeout:
+                        wait_time = min((2 ** attempt) * 2 + 5, 30)  # 7s, 13s, 30s max for timeouts
+                        print(f"⚠️ [WARN] Timeout hit on {self.current_model_name}, waiting longer to retry in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
+                    else:
+                        wait_time = (2 ** attempt) + 1  # Exponential backoff: 1s, 3s, 7s for rate limits
+                        print(f"⚠️ [WARN] Rate limit hit on {self.current_model_name}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
                     time.sleep(wait_time)
                     continue
-                elif is_rate_limit:
-                    # Rate limit persists, try fallback models
-                    print(f"⚠️ [WARN] {self.current_model_name} persistently rate limited, trying fallback models...")
+                elif is_rate_limit or is_timeout:
+                    # Rate limit or timeout persists, try fallback models
+                    error_type = "rate limited" if is_rate_limit else "timing out"
+                    print(f"⚠️ [WARN] {self.current_model_name} persistently {error_type}, trying fallback models...")
                     break
                 else:
                     # Not a rate limit error, re-raise immediately
