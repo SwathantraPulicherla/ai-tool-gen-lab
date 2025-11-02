@@ -245,9 +245,13 @@ def main():
                 attempt += 1
                 try:
                     # Generate tests for this file
+                    if args.verbose:
+                        print(f"   [GEN] Starting AI test generation for {os.path.basename(file_path)}...")
                     result = generator.generate_tests_for_file(
                         file_path, args.repo_path, output_dir, dependency_map, final_validation if attempt > 1 else None
                     )
+                    if args.verbose and result['success']:
+                        print(f"   [GEN] AI generation completed, post-processing...")
 
                     if not result['success']:
                         print(f"   [ERROR] Generation failed: {result['error']}")
@@ -257,6 +261,8 @@ def main():
                     if args.verbose:
                         print(f"   [VALIDATE] Validating (attempt {attempt})...")
                     validation_result = validator.validate_test_file(result['test_file'], file_path)
+                    if args.verbose:
+                        print(f"   [VALIDATE] Validation completed: {validation_result['quality']} quality")
 
                     # Check if regeneration is needed based on quality threshold
                     quality_levels = {'low': 0, 'medium': 1, 'high': 2}

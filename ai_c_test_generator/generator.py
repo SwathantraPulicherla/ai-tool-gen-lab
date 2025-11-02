@@ -206,11 +206,15 @@ class SmartTestGenerator:
 
         # Generate tests using modern API with fallback support
         try:
+            print(f"   [AI] Calling {self.current_model_name} API...")
             response = self._try_generate_with_fallback(prompt)
+            print(f"   [AI] API response received, processing...")
             test_code = response.text.strip()
 
             # POST-PROCESSING: Clean up common AI generation issues
+            print(f"   [POST] Post-processing generated code...")
             test_code = self._post_process_test_code(test_code, analysis, analysis['includes'])
+            print(f"   [SAVE] Saving test file...")
 
             # Save test file
             test_filename = f"test_{os.path.basename(file_path)}"
@@ -220,6 +224,7 @@ class SmartTestGenerator:
             with open(output_path, 'w') as f:
                 f.write(test_code)
 
+            print(f"   [DONE] Test file saved: {test_filename}")
             return {'success': True, 'test_file': output_path}
 
         except Exception as e:
