@@ -6,7 +6,7 @@ import os
 import re
 from typing import Dict, List
 
-from .analyzer import DependencyAnalyzer
+from analyzer import DependencyAnalyzer
 
 
 class TestValidator:
@@ -53,6 +53,9 @@ class TestValidator:
 
             # 4. LOGICAL CONSISTENCY VERIFICATION
             self._verify_logical_consistency(test_content, validation_result)
+
+            # 5. EMBEDDED HARDWARE VALIDATION
+            self._check_embedded_features(test_content, source_content, validation_result)
 
             # Determine overall quality rating
             validation_result['quality'] = self._calculate_quality_rating(validation_result)
@@ -286,6 +289,74 @@ class TestValidator:
                     result['issues'].append(f"Unreasonable assertion: TEST_ASSERT_EQUAL({exp_val}, {act_val})")
             except (ValueError, AttributeError):
                 pass  # Not simple integers, skip
+
+    def _check_embedded_features(self, test_content: str, source_content: str, result: Dict):
+        """Check embedded hardware and safety-critical features"""
+        
+        # Check for volatile register handling
+        if 'volatile' in source_content:
+            if 'volatile' not in test_content:
+                result['issues'].append("Source uses volatile registers but tests don't handle volatile semantics")
+                result['compiles'] = False
+        
+        # Check for bit field testing
+        bitfield_patterns = [r'\w+\s*:\s*\d+', r'unsigned\s+\w+\s*:\s*\d+']  # bit field declarations
+        if any(re.search(pattern, source_content) for pattern in bitfield_patterns):
+            # Check if tests use bit operations
+            bit_operations = ['<<', '>>', '&', '|', '~', '^']
+            has_bit_ops = any(op in test_content for op in bit_operations)
+            if not has_bit_ops:
+                result['issues'].append("Source uses bit fields but tests don't perform bit operations")
+        
+        # Check for state machine testing
+        state_machine_indicators = ['state', 'STATE_', 'enum.*state', 'switch.*state']
+        has_state_machine = any(re.search(pattern, source_content, re.IGNORECASE) for pattern in state_machine_indicators)
+        if has_state_machine:
+            # Check for state transition tests
+            transition_tests = ['transition', 'state_change', 'next_state']
+            has_transition_tests = any(indicator in test_content.lower() for indicator in transition_tests)
+            if not has_transition_tests:
+                result['issues'].append("Source has state machine but tests don't verify state transitions")
+        
+        # Check for TMR voting logic
+        tmr_indicators = ['tmr', 'triple', 'voting', 'majority']
+        has_tmr = any(indicator in source_content.lower() for indicator in tmr_indicators)
+        if has_tmr:
+            # Check for voting test scenarios
+            voting_scenarios = ['aaa', 'aab', 'abc', 'fault', 'disagree']
+            has_voting_tests = any(scenario in test_content.lower() for scenario in voting_scenarios)
+            if not has_voting_tests:
+                result['issues'].append("Source has TMR voting but tests don't cover voting scenarios")
+        
+        # Check for watchdog timer testing
+        watchdog_indicators = ['watchdog', 'wdt', 'timeout', 'feed']
+        has_watchdog = any(indicator in source_content.lower() for indicator in watchdog_indicators)
+        if has_watchdog:
+            # Check for timeout and feeding tests
+            watchdog_tests = ['timeout', 'feed', 'reset_prevent']
+            has_watchdog_tests = any(test in test_content.lower() for test in watchdog_tests)
+            if not has_watchdog_tests:
+                result['issues'].append("Source has watchdog timer but tests don't verify feeding/timeout")
+        
+        # Check for DMA/interrupt testing
+        dma_indicators = ['dma', 'interrupt', 'irq', 'isr']
+        has_dma = any(indicator in source_content.lower() for indicator in dma_indicators)
+        if has_dma:
+            # Check for hardware interaction simulation
+            hardware_simulation = ['register', 'peripheral', 'mock', 'stub']
+            has_hardware_tests = any(sim in test_content.lower() for sim in hardware_simulation)
+            if not has_hardware_tests:
+                result['issues'].append("Source uses DMA/interrupts but tests don't simulate hardware interactions")
+        
+        # Check for memory-mapped I/O
+        mmio_indicators = ['mmio', 'memory.*map', 'register.*0x', 'volatile.*uint32_t']
+        has_mmio = any(re.search(pattern, source_content, re.IGNORECASE) for pattern in mmio_indicators)
+        if has_mmio:
+            # Check for register access patterns
+            register_access = ['=', '&=', '|=', '^=', 'read', 'write']
+            has_register_tests = any(access in test_content for access in register_access)
+            if not has_register_tests:
+                result['issues'].append("Source uses memory-mapped I/O but tests don't verify register access")
 
     def _calculate_quality_rating(self, result: Dict) -> str:
         """Calculate overall quality rating"""
