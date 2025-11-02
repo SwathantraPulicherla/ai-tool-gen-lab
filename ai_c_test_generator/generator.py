@@ -96,12 +96,23 @@ class SmartTestGenerator:
 
     def _initialize_model(self):
         """Initialize the best available model"""
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+        
+        def init_model_with_timeout(model_name):
+            return genai.GenerativeModel(model_name)
+        
         for model_name in self.models_to_try:
             try:
-                self.model = genai.GenerativeModel(model_name)
-                self.current_model_name = model_name
-                print(f"✅ Using model: {model_name}")
-                break
+                # Use ThreadPoolExecutor for cross-platform timeout
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(init_model_with_timeout, model_name)
+                    self.model = future.result(timeout=30)  # 30 second timeout
+                    self.current_model_name = model_name
+                    print(f"✅ Using model: {model_name}")
+                    break
+            except FuturesTimeoutError:
+                print(f"[WARN] Model {model_name} initialization timed out after 30 seconds")
+                continue
             except Exception as e:
                 print(f"[WARN] Model {model_name} failed: {e}")
                 continue
