@@ -188,7 +188,7 @@ def main():
                     # Skip main.c as it's not suitable for unit testing
                     if file == 'main.c':
                         if args.verbose:
-                            print(f"⏭️ Skipping main.c (application entry point)")
+                            print(f"[SKIP] Skipping main.c (application entry point)")
                         continue
                     c_files.append(os.path.join(root, file))
 
