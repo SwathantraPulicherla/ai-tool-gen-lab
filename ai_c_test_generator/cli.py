@@ -202,12 +202,12 @@ def main():
         # Clean up old compilation reports
         compilation_report_dir = os.path.join(output_dir, "compilation_report")
         if os.path.exists(compilation_report_dir):
-            print("🧹 Cleaning up old compilation reports...")
+            print("[CLEAN] Cleaning up old compilation reports...")
             try:
                 import shutil
                 shutil.rmtree(compilation_report_dir)
             except (OSError, PermissionError) as e:
-                print(f"⚠️ Could not clean up old reports: {e}")
+                print(f"[WARN] Could not clean up old reports: {e}")
                 # Try to remove files individually
                 try:
                     for root, dirs, files in os.walk(compilation_report_dir, topdown=False):
@@ -223,7 +223,7 @@ def main():
                                 pass
                     os.rmdir(compilation_report_dir)
                 except OSError:
-                    print("⚠️ Skipping cleanup due to permission issues")
+                    print("[WARN] Skipping cleanup due to permission issues")
         os.makedirs(compilation_report_dir, exist_ok=True)
 
         # Process each file
@@ -255,7 +255,7 @@ def main():
 
                     # Validate the generated test
                     if args.verbose:
-                        print(f"   🔍 Validating (attempt {attempt})...")
+                        print(f"   [VALIDATE] Validating (attempt {attempt})...")
                     validation_result = validator.validate_test_file(result['test_file'], file_path)
 
                     # Check if regeneration is needed based on quality threshold
@@ -292,7 +292,7 @@ def main():
 
                     # Check if we should regenerate
                     if needs_regeneration:
-                        print(f"   🔄 Low quality detected, regenerating (attempt {attempt + 1}/{max_attempts})...")
+                        print(f"   [REGEN] Low quality detected, regenerating (attempt {attempt + 1}/{max_attempts})...")
                         regeneration_stats['total_regenerations'] += 1
                         # Remove the low-quality test file so it can be regenerated
                         if os.path.exists(result['test_file']):
@@ -368,16 +368,16 @@ def main():
         if low_quality_tests:
             if args.regenerate_on_low_quality:
                 # When regeneration is enabled, warn but don't fail
-                print(f"⚠️ {len(low_quality_tests)} test(s) still below {args.quality_threshold} quality threshold after regeneration:")
+                print(f"[WARN] {len(low_quality_tests)} test(s) still below {args.quality_threshold} quality threshold after regeneration:")
                 for test_file in low_quality_tests:
                     print(f"   - {test_file}")
-                print("💡 Consider increasing --max-regeneration-attempts or relaxing --quality-threshold")
+                print("[TIP] Consider increasing --max-regeneration-attempts or relaxing --quality-threshold")
             else:
                 # When regeneration is disabled, strict enforcement
                 print(f"[ERROR] {len(low_quality_tests)} test(s) failed to meet {args.quality_threshold} quality threshold:")
                 for test_file in low_quality_tests:
                     print(f"   - {test_file}")
-                print("💡 Use --regenerate-on-low-quality to automatically improve test quality")
+                print("[TIP] Use --regenerate-on-low-quality to automatically improve test quality")
                 sys.exit(1)
 
         # Overall success check
@@ -385,7 +385,7 @@ def main():
             print("[ERROR] No tests were successfully generated")
             sys.exit(1)
         elif successful_generations < len(c_files):
-            print("⚠️ Some files failed to generate tests - check validation reports")
+            print("[WARN] Some files failed to generate tests - check validation reports")
             sys.exit(1)
 
     except KeyboardInterrupt:
