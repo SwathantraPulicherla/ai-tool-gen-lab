@@ -6,6 +6,7 @@ CLI interface for AI C Test Generator
 import argparse
 import os
 import sys
+import time
 from pathlib import Path
 
 # Add compatibility for older Python versions
@@ -232,6 +233,7 @@ def main():
 
         for file_path in c_files:
             rel_path = os.path.relpath(file_path, args.repo_path)
+            file_start_time = time.time()
             print(f"🎯 Processing: {rel_path}")
 
             max_attempts = args.max_regeneration_attempts + 1  # +1 for initial generation
@@ -316,6 +318,10 @@ def main():
                 print(f"   ✅ Final: {os.path.basename(final_result['test_file'])} ({final_validation['quality']} quality)")
             else:
                 print(f"   ❌ Failed to generate acceptable test for {rel_path}")
+
+            # Print timing for this file
+            file_duration = time.time() - file_start_time
+            print(f"   ⏱️  Completed in {file_duration:.1f}s")
 
         # Save validation reports
         if validation_reports:
