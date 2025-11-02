@@ -167,7 +167,7 @@ class SmartTestGenerator:
 
     def build_dependency_map(self, repo_path: str) -> Dict[str, str]:
         """Build a map of function_name -> source_file for the entire repository"""
-        print("📋 Building global dependency map...")
+        print("[DEPS] Building global dependency map...")
         analyzer = DependencyAnalyzer(repo_path)
         all_c_files = analyzer.find_all_c_files()
 
@@ -199,7 +199,7 @@ class SmartTestGenerator:
                 dependency_map[called_func] != file_path):
                 functions_that_need_stubs.append(called_func)
 
-        print(f"   📋 {os.path.basename(file_path)}: {len(analysis['functions'])} functions, {len(functions_that_need_stubs)} need stubs")
+        print(f"   [DEPS] {os.path.basename(file_path)}: {len(analysis['functions'])} functions, {len(functions_that_need_stubs)} need stubs")
 
         # Build targeted prompt for this file only
         prompt = self._build_targeted_prompt(analysis, functions_that_need_stubs, repo_path, validation_feedback)
