@@ -6,7 +6,6 @@ CLI interface for AI C Test Generator
 import argparse
 import os
 import sys
-import time
 from pathlib import Path
 
 # Add compatibility for older Python versions
@@ -155,7 +154,6 @@ def validate_environment(args):
 
 def main():
     """Main CLI entry point"""
-    start_time = time.time()
     parser = create_parser()
     args = parser.parse_args()
 
@@ -168,7 +166,6 @@ def main():
     print(f"   Repository: {args.repo_path}")
     print(f"   Source dir: {args.source_dir}")
     print(f"   Output dir: {args.output}")
-    print(f"   Started at: {time.strftime('%H:%M:%S')}")
     print()
 
     try:
@@ -235,8 +232,7 @@ def main():
 
         for file_path in c_files:
             rel_path = os.path.relpath(file_path, args.repo_path)
-            file_start_time = time.time()
-            print(f"🎯 Processing: {rel_path} (started at {time.strftime('%H:%M:%S')})")
+            print(f"🎯 Processing: {rel_path}")
 
             max_attempts = args.max_regeneration_attempts + 1  # +1 for initial generation
             attempt = 0
@@ -321,10 +317,6 @@ def main():
             else:
                 print(f"   ❌ Failed to generate acceptable test for {rel_path}")
 
-            # Print timing for this file
-            file_duration = time.time() - file_start_time
-            print(f"   ⏱️  Completed in {file_duration:.1f}s")
-
         # Save validation reports
         if validation_reports:
             print(f"\n📊 Saving validation reports...")
@@ -381,10 +373,6 @@ def main():
                     print(f"   - {test_file}")
                 print("💡 Use --regenerate-on-low-quality to automatically improve test quality")
                 sys.exit(1)
-
-        # Print total execution time
-        total_duration = time.time() - start_time
-        print(f"   ⏱️  Total execution time: {total_duration:.1f}s")
 
         # Overall success check
         if successful_generations == 0:
